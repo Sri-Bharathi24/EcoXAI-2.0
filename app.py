@@ -1,311 +1,651 @@
-"""EcoXAI 2.0: Explainable IoT Water Intelligence for AI Data Centres.
 
-Run:  pip install streamlit pandas numpy plotly
-      streamlit run app.py
-
-Optional: put a trained model next to this file as `ecoxai_model.pkl`
-(joblib, multi-output regressor taking [servers, temperature, cooling_hours, mining]
-and returning [energy_kWh, cooling_water_L, carbon_kg]). The app uses it
-automatically; otherwise it falls back to clearly-labelled demo equations.
-"""
-import inspect
-import os
-import random
-
-import numpy as np
+import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import streamlit as st
+import numpy as np
+from datetime import datetime
 
-st.set_page_config(page_title="EcoXAI 2.0", page_icon="💧", layout="wide")
+st.set_page_config(
+    page_title="EcoXAI 2.0 | Water Intelligence",
+    page_icon="💧",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# ---------------------------------------------------------------- styling
-st.markdown(
-    """
+# -------------------- COLOURS & STYLE --------------------
+NAVY = "#071626"
+PANEL = "#10253A"
+SKY = "#79B9FF"
+AQUA = "#42D9D0"
+YELLOW = "#FFD166"
+ORANGE = "#FFB454"
+MINT = "#55D6A4"
+WHITE = "#F4F8FC"
+MUTED = "#A8BACB"
+BORDER = "#25435F"
+
+st.markdown(f"""
 <style>
-.stApp { background: #f4f8f5; }
-.hero { background: linear-gradient(135deg,#173b32,#2f7d62); color:#fff;
-        padding: 28px 32px; border-radius: 18px; margin-bottom: 18px; }
-.hero h1 { margin:0; font-size: 2.2rem; color:#fff; }
-.hero p { margin: 6px 0 0 0; opacity:.9; font-size:1.05rem; }
-.section-title { font-size:1.25rem; font-weight:700; color:#173b32; margin: 18px 0 2px 0; }
-.section-sub { color:#687a72; font-size:.92rem; margin-bottom:10px; }
-.card { background:#fff; border:1px solid #dbe7e0; border-radius:14px;
-        padding:14px 16px; min-height:104px; box-shadow:0 1px 3px rgba(23,59,50,.06); }
-.card-label { color:#687a72; font-size:.82rem; text-transform:uppercase; letter-spacing:.04em; }
-.card-value { color:#173b32; font-size:1.7rem; font-weight:700; margin-top:4px; }
-.card-note { color:#8aa096; font-size:.78rem; margin-top:2px; }
-.notice { background:#fff8e6; border-left:4px solid #e0a800; padding:10px 14px;
-          border-radius:8px; color:#5c4a00; font-size:.9rem; margin-top:14px; }
-.good { background:#e8f5ee; border-left:4px solid #2f7d62; padding:10px 14px;
-        border-radius:8px; color:#173b32; margin-top:14px; }
-.fix-high { background:#fdecec; border-left:4px solid #d64545; padding:9px 13px; border-radius:8px; margin:6px 0; color:#5a1a1a; }
-.fix-med  { background:#fff4e0; border-left:4px solid #e08a00; padding:9px 13px; border-radius:8px; margin:6px 0; color:#5a3a00; }
-.fix-ok   { background:#e8f5ee; border-left:4px solid #2f7d62; padding:9px 13px; border-radius:8px; margin:6px 0; color:#173b32; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+.stApp {{
+    background: {NAVY};
+    color: {WHITE};
+    font-family: 'Inter', sans-serif;
+}}
+[data-testid="stHeader"] {{
+    background: {NAVY};
+}}
+[data-testid="stSidebar"] {{
+    background: #0B2035;
+    border-right: 1px solid #1C4765;
+}}
+[data-testid="stSidebar"] * {{
+    color: {WHITE};
+}}
+h1, h2, h3, p, label {{
+    color: {WHITE};
+}}
+.stCaption, small {{
+    color: {MUTED} !important;
+}}
+div[data-testid="stMetric"] {{
+    background: {PANEL};
+    border: 1px solid {BORDER};
+    border-radius: 15px;
+    padding: 17px;
+}}
+div[data-testid="stMetricLabel"] p {{
+    color: {MUTED} !important;
+}}
+div[data-testid="stMetricValue"] {{
+    color: {YELLOW} !important;
+    font-weight: 800;
+}}
+div[data-testid="stMetricDelta"] {{
+    color: {AQUA} !important;
+}}
+.stTabs [data-baseweb="tab-list"] {{
+    gap: 8px;
+    background: {NAVY};
+}}
+.stTabs [data-baseweb="tab"] {{
+    background: {PANEL};
+    color: {WHITE};
+    border-radius: 8px 8px 0 0;
+    padding: 10px 14px;
+}}
+.stTabs [aria-selected="true"] {{
+    background: #164A68 !important;
+    color: #FFFFFF !important;
+    border-bottom: 2px solid {AQUA};
+}}
+.stButton > button {{
+    background: linear-gradient(100deg, #087EBA, #087F8C);
+    color: white;
+    border: 1px solid #42D9D0;
+    border-radius: 10px;
+    font-weight: 700;
+    min-height: 43px;
+}}
+.stButton > button:hover {{
+    border-color: {YELLOW};
+    color: white;
+}}
+div[data-baseweb="select"] > div,
+div[data-baseweb="input"] > div {{
+    background: {PANEL};
+    border-color: {BORDER};
+}}
+.hero {{
+    background: linear-gradient(120deg, #0A2340, #104A73 60%, #176D8C);
+    border: 1px solid {AQUA};
+    border-radius: 22px;
+    padding: 32px 30px;
+    margin-bottom: 22px;
+    box-shadow: 0 8px 35px rgba(0, 190, 220, 0.10);
+}}
+.hero-title {{
+    font-size: 2.7rem;
+    font-weight: 800;
+    color: white;
+    margin: 0;
+}}
+.hero-tagline {{
+    color: #E4F0F8;
+    font-size: 1.05rem;
+    margin-top: 10px;
+}}
+.hero-label {{
+    color: #9BECE7;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-size: 0.76rem;
+    font-weight: 700;
+}}
+.section-title {{
+    color: {WHITE};
+    font-size: 1.35rem;
+    font-weight: 800;
+    margin: 12px 0 5px 0;
+}}
+.info-card {{
+    background: {PANEL};
+    border: 1px solid {BORDER};
+    border-radius: 14px;
+    padding: 18px;
+    height: 100%;
+}}
+.info-title {{
+    color: {SKY};
+    font-weight: 700;
+    font-size: 1.02rem;
+}}
+.info-copy {{
+    color: {MUTED};
+    font-size: 0.92rem;
+    line-height: 1.6;
+}}
+.alert-box {{
+    background: #35291B;
+    border: 1px solid #75552A;
+    border-left: 5px solid {ORANGE};
+    border-radius: 10px;
+    padding: 14px 16px;
+    color: #FFE3B0;
+    margin: 10px 0;
+}}
+.good-box {{
+    background: #102F32;
+    border: 1px solid #225A58;
+    border-left: 5px solid {MINT};
+    border-radius: 10px;
+    padding: 14px 16px;
+    color: #C9F7E4;
+    margin: 10px 0;
+}}
+.note {{
+    color: {MUTED};
+    font-size: 0.82rem;
+    line-height: 1.5;
+}}
+.footer {{
+    border-top: 1px solid {BORDER};
+    text-align: center;
+    margin-top: 35px;
+    padding: 22px 8px 10px 8px;
+    color: {MUTED};
+}}
+.footer-name {{
+    color: {AQUA};
+    font-weight: 800;
+    font-size: 1rem;
+}}
 </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
 
-# ---------------------------------------------------------------- helpers
-def _accepts(func, name):
-    try:
-        return name in inspect.signature(func).parameters
-    except (TypeError, ValueError):
-        return False
-
-
-def show_chart(fig):
-    """Works on both older and newer Streamlit (use_container_width was deprecated)."""
-    if _accepts(st.plotly_chart, "width"):
-        st.plotly_chart(fig, width="stretch")
-    else:
-        st.plotly_chart(fig, use_container_width=True)
-
-
-def show_table(df):
-    if _accepts(st.dataframe, "width"):
-        st.dataframe(df, width="stretch", hide_index=True)
-    else:
-        st.dataframe(df, use_container_width=True, hide_index=True)
-
-
-# ---------------------------------------------------------------- model layer
-FEATURES = ["servers", "temperature", "cooling_hours", "mining"]
-EMISSION_FACTOR = 0.71  # kg CO2e per kWh: PLACEHOLDER, replace with a verified grid factor
-
-MODEL = None
-try:
-    import joblib
-
-    if os.path.exists("ecoxai_model.pkl"):
-        MODEL = joblib.load("ecoxai_model.pkl")
-except Exception:
-    MODEL = None
-
-
-def demo_predict(servers, temperature, cooling_hours, mining):
-    """Illustrative equations only. NOT a trained model and NOT a measurement."""
-    energy = servers * 0.4 * 24 * (1.35 if mining else 1.0)  # kWh/day
-    heat_factor = 1 + 0.03 * (temperature - 20)
-    cooling_factor = 0.6 + 0.4 * (cooling_hours / 24)
-    water = energy * 1.8 * heat_factor * cooling_factor  # litres/day
-    carbon = energy * EMISSION_FACTOR
-    return {"Energy": round(energy, 1), "Cooling water": round(water, 1), "Carbon": round(carbon, 1)}
-
-
-def predict(servers, temperature, cooling_hours, mining):
-    if MODEL is not None:
-        try:
-            x = pd.DataFrame([[servers, temperature, cooling_hours, int(mining)]], columns=FEATURES)
-            out = np.asarray(MODEL.predict(x)).ravel()
-            return {"Energy": round(float(out[0]), 1),
-                    "Cooling water": round(float(out[1]), 1),
-                    "Carbon": round(float(out[2]), 1)}
-        except Exception:
-            pass
-    return demo_predict(servers, temperature, cooling_hours, mining)
-
-
-def demo_feature_scores(servers, temperature, cooling_hours, mining):
-    """Demo importance scores (NOT SHAP). Replace with shap.TreeExplainer values."""
-    raw = {
-        "Active servers": 0.35 * servers / 100,
-        "Temperature": 0.30 * (temperature - 15) / 35,
-        "Cooling duration": 0.20 * cooling_hours / 24,
-        "Mining activity": 0.15 * (1 if mining else 0),
-    }
-    total = sum(raw.values()) or 1
-    return {k: v / total * 100 for k, v in raw.items()}
-
-
-def fix_first(servers, temperature, cooling_hours, mining):
-    """Threshold rules. Replace thresholds with verified operating limits."""
-    items = []
-    if temperature >= 35:
-        items.append(("high", f"Temperature is {temperature:.1f} °C. Inspect cooling capacity and airflow first."))
-    elif temperature >= 30:
-        items.append(("med", f"Temperature is {temperature:.1f} °C and rising. Watch cooling performance."))
-    if cooling_hours >= 18:
-        items.append(("med", f"Cooling runs {cooling_hours:.1f} h/day. Check whether it is compensating for a hot spot."))
-    if mining:
-        items.append(("med", "Mining workload is active. It adds sustained heat and energy load."))
-    if servers >= 70:
-        items.append(("med", f"{servers} active servers. Check rack density and load balancing."))
-    if not items:
-        items.append(("ok", "No condition crosses the demo thresholds. Keep monitoring."))
-    return items
-
-
-# ---------------------------------------------------------------- header
-st.markdown(
-    '<div class="hero"><h1>💧 EcoXAI 2.0</h1>'
-    "<p>Explainable IoT Water Intelligence for AI Data Centres: estimate, explain, then decide what to check first.</p></div>",
-    unsafe_allow_html=True,
-)
-
-# ---------------------------------------------------------------- sidebar
+# -------------------- SIDEBAR CONTROLS --------------------
 with st.sidebar:
-    st.header("Operating conditions")
-    servers = st.slider("Active servers", 1, 100, 40)
-    temperature = st.slider("Temperature (°C)", 15.0, 50.0, 28.0, 0.5)
-    cooling_hours = st.slider("Cooling duration (h/day)", 1.0, 24.0, 12.0, 0.5)
-    mining_active = st.toggle("Mining active", value=False)
-    live = st.toggle("Simulated live feed (every 3 s)", value=False)
-    st.caption("Model source: " + ("trained model file" if MODEL is not None else "demo equations (no trained model loaded)"))
+    st.markdown("## 💧 EcoXAI 2.0")
+    st.caption("WATER INTELLIGENCE")
+    st.divider()
+
+    st.markdown("### Operating conditions")
+    servers = st.slider("Active servers", 10, 500, 250)
+    temperature = st.slider("Temperature (°C)", 15, 50, 28)
+    cooling_hours = st.slider("Cooling hours per day", 1.0, 24.0, 6.5, 0.5)
+    mining_active = st.toggle("Crypto-mining workload", value=False)
+
+    st.divider()
+    st.markdown("### Demo settings")
+    simulated_live = st.toggle("Simulate changing readings", value=False)
+    st.caption(
+        "Demo only: these controls do not read physical IoT sensors."
+    )
+
+    run_prediction = st.button(
+        "💧 Update example",
+        use_container_width=True
+    )
 
 
-# ---------------------------------------------------------------- dashboard
-def show_dashboard(s, t, c, mining, is_live):
-    pred = predict(s, t, c, mining)
+# -------------------- DEMO CALCULATIONS --------------------
+# Illustrative formulas only. Replace with validated model predictions.
+water_l = (
+    150
+    + servers * 7.5
+    + max(temperature - 20, 0) * 12
+    + cooling_hours * 18
+    + (120 if mining_active else 0)
+)
+energy_kwh = (
+    servers * 9.5
+    + max(temperature - 20, 0) * 3
+    + cooling_hours * 4
+    + (180 if mining_active else 0)
+)
+carbon_kg = energy_kwh * 0.71  # Example factor, not a verified local factor.
 
-    badge = "🟢 Live (simulated)" if is_live else "⚪ Snapshot"
-    st.markdown(f'<div class="section-title">Resource indicators <span style="font-size:.8rem;color:#687a72">{badge}</span></div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-sub">Daily estimates for the selected operating conditions.</div>', unsafe_allow_html=True)
+if simulated_live:
+    # Small visual variation to demonstrate how a live dashboard might behave.
+    rng = np.random.default_rng()
+    water_display = max(0, water_l + rng.normal(0, water_l * 0.025))
+    energy_display = max(0, energy_kwh + rng.normal(0, energy_kwh * 0.02))
+    carbon_display = energy_display * 0.71
+else:
+    water_display = water_l
+    energy_display = energy_kwh
+    carbon_display = carbon_kg
 
-    kpis = [
-        ("Energy", f"{pred['Energy']:,.0f} kWh", "per day"),
-        ("Cooling water", f"{pred['Cooling water']:,.0f} L", "per day"),
-        ("Carbon", f"{pred['Carbon']:,.0f} kg CO₂e", "placeholder emission factor"),
-    ]
-    for col, (label, value, note) in zip(st.columns(3), kpis):
-        with col:
-            st.markdown(f'<div class="card"><div class="card-label">{label}</div><div class="card-value">{value}</div><div class="card-note">{note}</div></div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="section-title">Fix first</div>', unsafe_allow_html=True)
-    css = {"high": "fix-high", "med": "fix-med", "ok": "fix-ok"}
-    for level, msg in fix_first(s, t, c, mining):
-        st.markdown(f'<div class="{css[level]}">{msg}</div>', unsafe_allow_html=True)
+# -------------------- HERO --------------------
+st.markdown("""
+<div class="hero">
+    <div class="hero-label">Sustainable Computing · Water Intelligence</div>
+    <div class="hero-title">💧 EcoXAI 2.0</div>
+    <div class="hero-tagline">
+        Saving Water · Explaining Why · Making Smarter Decisions
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-    left, right = st.columns(2)
+st.markdown(
+    "**Understand water use. Discover the reasons. Know what to check next.**"
+)
+st.caption(
+    "Demonstration dashboard · Values below come from illustrative formulas, "
+    "not a trained model or physical sensors."
+)
+
+
+# -------------------- KEY INDICATORS --------------------
+st.markdown('<div class="section-title">Your resource snapshot</div>',
+            unsafe_allow_html=True)
+
+c1, c2, c3 = st.columns(3)
+
+with c1:
+    st.metric("💧 Cooling-water indicator", f"{water_display:,.0f} L")
+    st.caption("Illustrative daily indicator")
+
+with c2:
+    st.metric("⚡ Energy indicator", f"{energy_display:,.0f} kWh")
+    st.caption("Illustrative daily indicator")
+
+with c3:
+    st.metric("🌍 Carbon indicator", f"{carbon_display:,.0f} kg CO₂e")
+    st.caption("Uses an example emissions factor")
+
+
+# -------------------- SIMPLE ALERTS --------------------
+st.markdown('<div class="section-title">What should you check first?</div>',
+            unsafe_allow_html=True)
+
+if temperature >= 35:
+    st.markdown(
+        f'<div class="alert-box">🌡️ <b>Temperature is high in this scenario.</b>'
+        f'<br>Current example input: {temperature}°C. '
+        'Check cooling conditions and compare against your facility’s '
+        'approved operating limits.</div>',
+        unsafe_allow_html=True
+    )
+else:
+    st.markdown(
+        f'<div class="good-box">✓ Temperature input is {temperature}°C. '
+        'This demo alert threshold has not been crossed. '
+        'This does not confirm that a real facility is safe.</div>',
+        unsafe_allow_html=True
+    )
+
+if mining_active:
+    st.info(
+        "Crypto-mining is enabled in this example. "
+        "Its real impact depends on hardware, workload, cooling design, "
+        "and measured operating data."
+    )
+
+st.caption(
+    "Alerts are simple demo rules, not professional facility-safety advice."
+)
+
+
+# -------------------- TABS --------------------
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "📊 Overview",
+    "🌊 Water Explorer",
+    "🧠 Why it changes",
+    "🔄 What-if comparison",
+    "ℹ️ About & validation"
+])
+
+
+# -------------------- TAB 1: OVERVIEW --------------------
+with tab1:
+    left, right = st.columns([1.15, 0.85])
 
     with left:
-        st.markdown('<div class="section-title">Water vs temperature</div>', unsafe_allow_html=True)
-        temps = np.arange(15, 50.5, 0.5)
-        water = [predict(s, float(x), c, mining)["Cooling water"] for x in temps]
-        fig1 = go.Figure()
-        fig1.add_trace(go.Scatter(x=temps, y=water, mode="lines", line=dict(color="#2f7d62", width=3), name="Cooling water"))
-        fig1.add_trace(go.Scatter(x=[t], y=[pred["Cooling water"]], mode="markers",
-                                  marker=dict(size=13, color="#d64545"), name="Current"))
-        fig1.update_layout(height=340, margin=dict(l=10, r=10, t=10, b=10),
-                           xaxis_title="Temperature (°C)", yaxis_title="Water (L/day)",
-                           plot_bgcolor="#fff", paper_bgcolor="rgba(0,0,0,0)", legend=dict(orientation="h"))
-        show_chart(fig1)
+        st.markdown("### Water indicator by temperature")
+
+        temperatures = np.arange(15, 51, 1)
+        water_curve = [
+            150 + servers * 7.5
+            + max(t - 20, 0) * 12
+            + cooling_hours * 18
+            + (120 if mining_active else 0)
+            for t in temperatures
+        ]
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=temperatures,
+            y=water_curve,
+            mode="lines",
+            line=dict(color=AQUA, width=3),
+            fill="tozeroy",
+            fillcolor="rgba(66,217,208,0.10)",
+            name="Example indicator"
+        ))
+        fig.add_vline(
+            x=temperature,
+            line_dash="dash",
+            line_color=YELLOW,
+            annotation_text="Selected temperature",
+            annotation_font_color=YELLOW
+        )
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor=PANEL,
+            font=dict(color=WHITE),
+            xaxis_title="Temperature (°C)",
+            yaxis_title="Illustrative water indicator (L/day)",
+            margin=dict(l=10, r=10, t=20, b=10),
+            height=360
+        )
+        fig.update_xaxes(gridcolor=BORDER)
+        fig.update_yaxes(gridcolor=BORDER)
+        st.plotly_chart(fig, use_container_width=True)
 
     with right:
-        st.markdown('<div class="section-title">What drives the estimate</div>', unsafe_allow_html=True)
-        scores = demo_feature_scores(s, t, c, mining)
-        names = list(scores.keys())[::-1]
-        vals = [scores[n] for n in names]
-        fig2 = go.Figure(go.Bar(x=vals, y=names, orientation="h", marker_color="#2f7d62",
-                                text=[f"{v:.0f}%" for v in vals], textposition="outside"))
-        fig2.update_layout(height=340, margin=dict(l=10, r=40, t=10, b=10),
-                           xaxis_title="Demo contribution (%). Not SHAP yet.",
-                           plot_bgcolor="#fff", paper_bgcolor="rgba(0,0,0,0)")
-        show_chart(fig2)
+        st.markdown("### How to read this")
+        st.markdown(f"""
+        <div class="info-card">
+            <div class="info-title">💧 Water</div>
+            <p class="info-copy">
+            This example changes when the selected server count, temperature,
+            cooling duration, or mining setting changes.
+            </p>
+            <div class="info-title">🔎 Explanation</div>
+            <p class="info-copy">
+            A real XAI system should show which inputs influenced its model
+            prediction. This demo chart shows formula behaviour only.
+            </p>
+            <div class="info-title">🎯 Next step</div>
+            <p class="info-copy">
+            Connect measured data and a tested model before using the output
+            for real operating decisions.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
 
-    st.markdown('<div class="section-title">Operating conditions</div>', unsafe_allow_html=True)
-    details = [("Active servers", str(s)), ("Temperature", f"{t:.1f} °C"),
-               ("Cooling duration", f"{c:.1f} h/day"), ("Mining activity", "Active" if mining else "Inactive")]
-    for col, (label, value) in zip(st.columns(4), details):
-        with col:
-            st.markdown(f'<div class="card"><div class="card-label">{label}</div><div class="card-value">{value}</div><div class="card-note">Simulated input</div></div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="notice"><b>Transparency:</b> Unless a trained model file is loaded, values come from illustrative equations and demo feature scores. They are not measurements, validated predictions, or SHAP explanations.</div>', unsafe_allow_html=True)
-
-
-if live and hasattr(st, "fragment"):
-    @st.fragment(run_every="3s")
-    def live_panel():
-        # Small random variation for demonstration; not sensor data.
-        s = int(np.clip(servers + random.choice([-2, -1, 0, 1, 2]), 1, 100))
-        t = float(np.clip(temperature + random.choice([-0.5, 0, 0.5, 1]), 15, 50))
-        c = float(np.clip(cooling_hours + random.choice([-0.5, 0, 0.5]), 1, 24))
-        show_dashboard(s, t, c, mining_active, True)
-
-    live_panel()
-else:
-    if live:
-        st.info("Your Streamlit version has no st.fragment, so this is a static snapshot. Upgrade Streamlit for timed refresh.")
-    show_dashboard(servers, temperature, cooling_hours, mining_active, False)
-
-# ---------------------------------------------------------------- tabs
-st.markdown("")
-tab1, tab2, tab3, tab4 = st.tabs(["What-if lab", "Architecture", "Validation & limits", "Project story"])
-
-with tab1:
-    st.markdown('<div class="section-title">Compare two scenarios</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-sub">Change inputs and compare the output. Replace the demo calculation with your trained model before judging.</div>', unsafe_allow_html=True)
-    baseline = predict(servers, temperature, cooling_hours, mining_active)
-    x, y = st.columns(2)
-    with x:
-        st.markdown("**Baseline**")
-        st.write(f"{servers} servers · {temperature:.1f}°C · {cooling_hours:.1f} cooling hours/day · Mining {'on' if mining_active else 'off'}")
-    with y:
-        st.markdown("**Alternative conditions**")
-        alt_servers = st.slider("Servers", 1, 100, int(servers), key="alt_servers")
-        alt_temp = st.slider("Temperature (°C)", 15.0, 50.0, float(max(15.0, min(50.0, temperature - 3))), 0.5, key="alt_temp")
-        alt_cooling = st.slider("Cooling duration (h/day)", 1.0, 24.0, float(max(1.0, min(24.0, cooling_hours - 1))), 0.5, key="alt_cooling")
-        alt_mining = st.toggle("Mining active", value=mining_active, key="alt_mining")
-    alternative = predict(alt_servers, alt_temp, alt_cooling, alt_mining)
-    comp = pd.DataFrame([
-        {"Indicator": "Energy (kWh)", "Baseline": baseline["Energy"], "Alternative": alternative["Energy"]},
-        {"Indicator": "Cooling water (L)", "Baseline": baseline["Cooling water"], "Alternative": alternative["Cooling water"]},
-        {"Indicator": "Carbon (kg CO₂e)", "Baseline": baseline["Carbon"], "Alternative": alternative["Carbon"]},
-    ])
-    show_table(comp)
-    delta = baseline["Cooling water"] - alternative["Cooling water"]
-    st.info(f"Difference in cooling-water indicator: {delta:+.2f} L. Not evidence of real-world savings unless the model is validated.")
-
+# -------------------- TAB 2: WATER EXPLORER --------------------
 with tab2:
-    st.markdown('<div class="section-title">Proposed system architecture</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-sub">Prediction and explanation sit between data inputs and operator guidance.</div>', unsafe_allow_html=True)
-    steps = [
-        ("01 · Data inputs", "Dataset initially; verified temperature / power sensors in a future IoT deployment"),
-        ("02 · Preprocessing", "Check missing values, units and feature order"),
-        ("03 · Random Forest", "Predict supported resource indicators using the trained model"),
-        ("04 · SHAP explanation", "Explain feature contributions to each prediction"),
-        ("05 · Decision support", "Threshold rules, recommendations and what-if comparison"),
-        ("06 · Dashboard", "Readable indicators, explanations and limitations"),
-    ]
-    for title, desc in steps:
-        st.markdown(f'<div class="card" style="min-height:0;margin:8px 0;"><b style="color:#173b32">{title}</b><div style="color:#687a72;font-size:.9rem;margin-top:4px">{desc}</div></div>', unsafe_allow_html=True)
-    st.caption("Do not claim physical sensor deployment unless hardware has been connected and tested.")
+    st.markdown("### Explore the selected conditions")
+    st.write(
+        "Change the controls in the left panel to see how this demo's "
+        "illustrative water indicator responds."
+    )
 
+    fig2 = go.Figure(go.Bar(
+        x=["Water", "Energy", "Carbon"],
+        y=[water_display, energy_display, carbon_display],
+        marker_color=[AQUA, SKY, YELLOW],
+        text=[
+            f"{water_display:,.0f}",
+            f"{energy_display:,.0f}",
+            f"{carbon_display:,.0f}"
+        ],
+        textposition="outside"
+    ))
+    fig2.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor=PANEL,
+        font=dict(color=WHITE),
+        yaxis_title="Illustrative value (different units)",
+        showlegend=False,
+        margin=dict(l=10, r=10, t=25, b=10),
+        height=360
+    )
+    fig2.update_xaxes(gridcolor=BORDER)
+    fig2.update_yaxes(gridcolor=BORDER)
+    st.plotly_chart(fig2, use_container_width=True)
+
+    st.warning(
+        "Water, energy, and carbon use different units. "
+        "This chart is for visual exploration, not a direct comparison "
+        "of their magnitudes."
+    )
+
+
+# -------------------- TAB 3: EXPLANATION --------------------
 with tab3:
-    st.markdown('<div class="section-title">Validation & limitations</div>', unsafe_allow_html=True)
+    st.markdown("### Why does the example change?")
+    st.write(
+        "These are the inputs used by the demonstration formula. "
+        "They are not SHAP values and do not show scientifically measured "
+        "causal effects."
+    )
+
+    drivers = pd.DataFrame({
+        "Input": [
+            "Active servers",
+            "Temperature",
+            "Cooling duration",
+            "Mining setting"
+        ],
+        "Current value": [
+            f"{servers} servers",
+            f"{temperature} °C",
+            f"{cooling_hours:.1f} hours/day",
+            "On" if mining_active else "Off"
+        ],
+        "What it represents": [
+            "How many servers are active in this scenario",
+            "The selected temperature input",
+            "The example cooling duration",
+            "Whether the example mining workload is enabled"
+        ]
+    })
+    st.dataframe(drivers, use_container_width=True, hide_index=True)
+
     st.markdown("""
-**Current status:** Without `ecoxai_model.pkl` this app is a UI prototype using demo equations.
+    <div class="info-card">
+        <div class="info-title">What makes Explainable AI useful?</div>
+        <p class="info-copy">
+        A trained model can produce a prediction, but operators also need
+        to understand which inputs influenced it. EcoXAI 2.0 is designed
+        to use SHAP to explain predictions after the real model is connected
+        and tested.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
-Before presenting validation, add:
-- Held-out test-set R² and MAE for each model target.
-- Dataset source, row count, features and units.
-- Train/test split method and preprocessing details.
-- Actual SHAP values from the same trained model.
+    st.caption(
+        "The current version does not calculate real SHAP explanations."
+    )
 
-**Limitations**
-- Monitoring values are simulated.
-- Demo calculations are not measurements or validated predictions.
-- Historical or synthetic data may not generalise to real facilities.
-- Carbon estimates need a verified electricity-emissions factor.
-- IoT sensor integration is future work unless already implemented and tested.
-""")
-    st.info("Replace this section with genuine metrics from your held-out test set. Do not invent scores.")
 
+# -------------------- TAB 4: WHAT-IF --------------------
 with tab4:
-    st.markdown('<div class="section-title">EcoXAI 2.0 in one minute</div>', unsafe_allow_html=True)
+    st.markdown("### What if operating conditions changed?")
+    st.write(
+        "Compare the current scenario with alternative inputs. "
+        "Both results below use illustrative formulas."
+    )
+
+    a, b = st.columns(2)
+
+    with a:
+        st.markdown("#### Current scenario")
+        st.write(f"Servers: **{servers}**")
+        st.write(f"Temperature: **{temperature}°C**")
+        st.write(f"Cooling: **{cooling_hours:.1f} hours/day**")
+        st.write(f"Mining: **{'On' if mining_active else 'Off'}**")
+
+    with b:
+        st.markdown("#### Try alternative conditions")
+        alt_servers = st.slider(
+            "Alternative servers", 10, 500, min(servers, 500), key="alt_servers"
+        )
+        alt_temp = st.slider(
+            "Alternative temperature (°C)", 15, 50,
+            temperature, key="alt_temp"
+        )
+        alt_cooling = st.slider(
+            "Alternative cooling hours/day", 1.0, 24.0,
+            cooling_hours, 0.5, key="alt_cooling"
+        )
+        alt_mining = st.toggle(
+            "Alternative mining workload", value=mining_active, key="alt_mining"
+        )
+
+    alt_water = (
+        150 + alt_servers * 7.5
+        + max(alt_temp - 20, 0) * 12
+        + alt_cooling * 18
+        + (120 if alt_mining else 0)
+    )
+    alt_energy = (
+        alt_servers * 9.5
+        + max(alt_temp - 20, 0) * 3
+        + alt_cooling * 4
+        + (180 if alt_mining else 0)
+    )
+    alt_carbon = alt_energy * 0.71
+
+    comparison = pd.DataFrame({
+        "Indicator": ["Cooling-water demo value", "Energy demo value", "Carbon demo value"],
+        "Current scenario": [
+            f"{water_display:,.1f} L",
+            f"{energy_display:,.1f} kWh",
+            f"{carbon_display:,.1f} kg CO₂e"
+        ],
+        "Alternative scenario": [
+            f"{alt_water:,.1f} L",
+            f"{alt_energy:,.1f} kWh",
+            f"{alt_carbon:,.1f} kg CO₂e"
+        ]
+    })
+    st.dataframe(comparison, use_container_width=True, hide_index=True)
+
+    difference = water_display - alt_water
+    if difference > 0:
+        st.success(
+            f"The alternative scenario gives a {difference:,.1f} L lower "
+            "illustrative water indicator in this demo."
+        )
+    elif difference < 0:
+        st.warning(
+            f"The alternative scenario gives a {abs(difference):,.1f} L higher "
+            "illustrative water indicator in this demo."
+        )
+    else:
+        st.info("Both scenarios have the same illustrative water indicator.")
+
+    st.caption(
+        "This is not proof of real water savings. Validate with a trained model "
+        "and reliable operational data."
+    )
+
+
+# -------------------- TAB 5: ABOUT & VALIDATION --------------------
+with tab5:
+    st.markdown("### What is EcoXAI 2.0?")
+    st.write(
+        "EcoXAI 2.0 is a project concept for making water-related resource "
+        "estimates in AI data centres easier to understand. It combines a "
+        "dashboard demonstration with a proposed explainable-AI and IoT design."
+    )
+
+    st.markdown("### Key innovation")
     st.markdown("""
-**Problem:** Data-centre and mining workloads consume energy and require cooling. Operators need understandable ways to examine resource impact.
+    <div class="info-card">
+        <div class="info-title">Estimate → Explain → Investigate</div>
+        <p class="info-copy">
+        The goal is not only to display a number, but also to explain which
+        inputs influenced a prediction and help users decide what to check next.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
-**Solution:** EcoXAI combines resource prediction with explainability, helping users explore both an estimate and the input features that influenced it.
+    st.markdown("### Current implementation status")
+    status = pd.DataFrame({
+        "Feature": [
+            "Dark ocean dashboard",
+            "Interactive operating controls",
+            "Example resource calculations",
+            "Simulated live variation",
+            "Trained prediction model",
+            "Genuine SHAP explanations",
+            "Physical IoT sensor readings",
+            "Verified test metrics"
+        ],
+        "Status": [
+            "Available",
+            "Available",
+            "Demo only",
+            "Optional demo",
+            "Not connected in this file",
+            "Not connected in this file",
+            "Not connected in this file",
+            "Not calculated in this file"
+        ]
+    })
+    st.dataframe(status, use_container_width=True, hide_index=True)
 
-**Difference:** The focus is interpretable sustainability decision support, with a pathway toward IoT sensor integration.
+    st.markdown("### Planned system flow")
+    st.code(
+        "Dataset / IoT sensors\n"
+        "        ↓\n"
+        "Data validation and preparation\n"
+        "        ↓\n"
+        "Trained resource prediction model\n"
+        "        ↓\n"
+        "SHAP explanation\n"
+        "        ↓\n"
+        "Dashboard, alerts and what-if comparison",
+        language="text"
+    )
 
-**Next step:** Connect validated trained models and verified sensor data, then evaluate with real operational data.
-""")
-    st.markdown('<div class="good"><b>Presentation line:</b> “EcoXAI aims to make sustainability predictions understandable, so operators can investigate the factors behind resource impact and decide what to check first.”</div>', unsafe_allow_html=True)
+    st.markdown("### Important limitations")
+    st.markdown("""
+    - The displayed values come from illustrative formulas.
+    - The changing feed is simulated, not a real-time sensor connection.
+    - The driver table is not a genuine SHAP explanation.
+    - The carbon figure uses an example emissions factor.
+    - No real-world water savings are claimed.
+    - A trained model, reliable data, test metrics, and actual sensor integration
+      must be added and tested before making deployment claims.
+    """)
 
-st.markdown("---")
-st.caption("EcoXAI 2.0: Explainable IoT Water Intelligence for AI Data Centres")
-st.markdown("<div style='text-align:center;color:#687a72;font-size:0.85rem;margin-top:8px;'>Developed by <b>SRI BHARATHI VN</b><br/>III B.Sc. Computer Science with Cognitive Systems</div>", unsafe_allow_html=True)
+    st.markdown("### Technology")
+    st.write(
+        "Python · Streamlit · Pandas · NumPy · Plotly · "
+        "Scikit-learn / Random Forest and SHAP (planned integration)"
+    )
+
+
+# -------------------- FOOTER --------------------
+st.markdown("""
+<div class="footer">
+    <div class="footer-name">Developed by SRI BHARATHI VN</div>
+    <div>III B.Sc. Computer Science with Cognitive Systems</div>
+    <div style="margin-top:8px;">
+        EcoXAI 2.0 · Explainable IoT Water Intelligence for AI Data Centres
+    </div>
+    <div style="margin-top:8px;font-size:0.78rem;">
+        Demo interface · Simulated values are not real sensor measurements.
+    </div>
+</div>
+""", unsafe_allow_html=True)
