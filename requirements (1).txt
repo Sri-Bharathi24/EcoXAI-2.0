@@ -1,0 +1,5 @@
+streamlit>=1.37
+pandas
+numpy
+scikit-learn
+shap
