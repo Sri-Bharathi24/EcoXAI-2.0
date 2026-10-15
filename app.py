@@ -127,6 +127,20 @@ html, body, [class*="css"], .stApp { font-family:'Manrope',sans-serif; }
 .footer { display:flex; justify-content:space-between; align-items:center; border-top:1px solid #123B5E; margin-top:26px; padding:16px 4px 4px 4px; color:#8FD3F5; font-size:.8rem; }
 .footer .sc { font-family:'Caveat',cursive; font-size:1.4rem; color:#9FDDF7; }
 div[data-testid="stVerticalBlockBorderWrapper"] { border-color:#1A5A86 !important; border-radius:16px !important; background:linear-gradient(145deg,#0A2644,#071C33); }
+.hero { background:radial-gradient(circle at 88% 15%,rgba(39,216,232,.38),transparent 38%),radial-gradient(circle at 70% 100%,rgba(30,123,224,.55),transparent 45%),linear-gradient(100deg,#05203D 0%,#0A4A82 55%,#1B86DA 100%); }
+.chips { margin-top:14px; display:flex; gap:8px; flex-wrap:wrap; }
+.chip { background:rgba(4,16,31,.45); border:1px solid rgba(159,233,242,.45); color:#DDF6FF; border-radius:20px; padding:4px 13px; font-size:.78rem; font-weight:700; }
+.kc { transition:transform .15s, box-shadow .15s; }
+.kc:hover { transform:translateY(-2px); box-shadow:0 0 18px rgba(39,216,232,.28); }
+.kc .val { font-size:1.55rem; overflow-wrap:anywhere; }
+.live { margin-left:10px; font-size:.74rem; font-weight:800; padding:2px 10px; border-radius:20px; }
+.live.on { background:#0F5E4D; color:#55FFC8; animation:pulse 1.4s infinite; }
+.live.off { background:#1E2F44; color:#8FA9BF; }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.45; } }
+.meter { position:relative; height:12px; border-radius:8px; background:linear-gradient(90deg,#55D6A4,#FFD166 55%,#FF5D68); margin-top:14px; }
+.mark { position:absolute; top:-5px; width:6px; height:22px; background:#fff; border-radius:3px; transform:translateX(-3px); box-shadow:0 0 8px #fff; }
+.mlab { display:flex; justify-content:space-between; color:#A8BED2; font-size:.78rem; margin-top:10px; }
+.msub { color:#8FA9BF; font-size:.75rem; margin-top:4px; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -362,7 +376,7 @@ DROP = ('<svg width="64" height="78" viewBox="0 0 64 80"><defs><linearGradient i
         '<path d="M32 3C32 3 8 30 8 50a24 24 0 0 0 48 0C56 30 32 3 32 3Z" fill="url(#g)"/>'
         '<path d="M20 52a12 12 0 0 0 12 12" stroke="#fff" stroke-opacity=".75" stroke-width="3" fill="none" stroke-linecap="round"/></svg>')
 
-PAGES = ["🏠 Home", "📊 Data Explorer", "🧠 XAI Explanations", "🔮 What-If", "✅ Validation", "🧩 Architecture"]
+PAGES = ["🏠 Home", "📊 Data Explorer", "🧠 XAI Explanations", "🔮 What-If", "🌆 City Scenarios", "✅ Validation", "🧩 Architecture"]
 with st.sidebar:
     st.markdown('<div class="brand"><h2>EcoXAI <span>2.0</span></h2><p>Saving Water.<br>Explaining Why.<br>Intelligently.</p></div>', unsafe_allow_html=True)
     page = st.radio("Navigation", PAGES, label_visibility="collapsed")
@@ -374,7 +388,8 @@ with st.sidebar:
 st.markdown(
     '<div class="hero"><div><h1>EcoXAI <span>2.0</span></h1>'
     '<div class="l2">Saving Water. Explaining Why. Intelligently.</div>'
-    '<div class="l3">Explainable IoT Water Intelligence for AI Data Centres</div></div></div>',
+    '<div class="l3">Explainable IoT Water Intelligence for AI Data Centres</div>'
+    '<div class="chips"><span class="chip">Random Forest</span><span class="chip">SHAP explainability</span><span class="chip">IoT-ready</span><span class="chip">What-if analysis</span></div></div></div>',
     unsafe_allow_html=True,
 )
 
@@ -389,7 +404,8 @@ else:
 # ------------------------------------------------------------------
 if page == PAGES[0]:
     head, tog, rst = st.columns([3, 2.2, 1])
-    head.markdown('<div class="sec">Live resource indicators<span class="pill"><i></i>Simulated data</span></div>', unsafe_allow_html=True)
+    live_tag = '<span class="live on">● LIVE</span>' if st.session_state.running else '<span class="live off">Paused</span>'
+    head.markdown(f'<div class="sec">Live resource indicators<span class="pill"><i></i>Simulated data</span>{live_tag}</div>', unsafe_allow_html=True)
     tog.toggle("Start live monitoring", key="running")
     if rst.button("Reset stream"):
         st.session_state.history = st.session_state.history[:1]
@@ -420,6 +436,15 @@ if page == PAGES[0]:
             c3.markdown(kcard("🧠 Top driver", FEATURES[top], f"About {abs(sv[top]):,.0f} {WATER_UNIT} {'up' if sv[top] > 0 else 'down'} (SHAP)"), unsafe_allow_html=True)
             c4.markdown(kcard("📈 Vs dataset average", f"{vs_avg:+.0f}%", f"Average water use: {AVG_WATER:,.0f} {WATER_UNIT}"), unsafe_allow_html=True)
 
+            lo_w, hi_w = float(data[TARGET].min()), float(data[TARGET].max())
+            pos = 0.0 if hi_w == lo_w else float(np.clip((now["Predicted water"] - lo_w) / (hi_w - lo_w), 0, 1))
+            st.markdown(
+                f'<div class="pn"><h4>Water level meter</h4><div class="meter"><div class="mark" style="left:{pos * 100:.0f}%"></div></div>'
+                f'<div class="mlab"><span>Low ({lo_w:,.0f} {WATER_UNIT})</span><span>High ({hi_w:,.0f} {WATER_UNIT})</span></div>'
+                '<div class="msub">Where this prediction sits in the water range of your dataset</div></div>',
+                unsafe_allow_html=True,
+            )
+
             t_col, d_col = st.columns([1.35, 1])
             with t_col:
                 with st.container(border=True):
@@ -434,6 +459,11 @@ if page == PAGES[0]:
             st.markdown(actions_html(sv), unsafe_allow_html=True)
 
         st.markdown(strip_html(row_now, sv), unsafe_allow_html=True)
+
+        st.markdown("**Recent sensor readings**")
+        recent = pd.DataFrame(history[-6:][::-1])[["Reading"] + FEATURES + ["Predicted water"]].copy()
+        recent[MINING] = recent[MINING].astype(int).map({0: "Off", 1: "On"})
+        st.dataframe(recent.round(1), hide_index=True)
 
     home_panel()
 
@@ -500,9 +530,47 @@ elif page == PAGES[3]:
     st.caption("This compares model predictions. It does not prove real savings, and it does not check performance limits of a real facility.")
 
 # ------------------------------------------------------------------
-# PAGE: VALIDATION
+# PAGE: CITY SCENARIOS
 # ------------------------------------------------------------------
 elif page == PAGES[4]:
+    st.markdown('<div class="sec">City scenarios</div>', unsafe_allow_html=True)
+    st.info(
+        "Your dataset has no city column, so these are EXAMPLE scenarios, not measured city data. "
+        "Every city gets the same servers, cooling hours and mining setting. Only the assumed data-centre "
+        "temperature differs. Edit any value, add a city, or replace the numbers with real ones."
+    )
+    cities = pd.DataFrame({
+        "City": ["Chennai", "Mumbai", "Hyderabad", "Bengaluru", "Delhi"],
+        "Servers": [round(float(MEDIAN[SERVERS]))] * 5,
+        "Temperature (assumed °C)": [34.0, 33.0, 35.0, 30.0, 36.0],
+        "Cooling hours": [round(float(MEDIAN[COOLING]), 1)] * 5,
+        "Mining on": [False] * 5,
+    })
+    edited = st.data_editor(
+        cities, num_rows="dynamic", hide_index=True, key="city_editor",
+        column_config={
+            "Temperature (assumed °C)": st.column_config.NumberColumn(min_value=float(LOW[TEMP]), max_value=float(HIGH[TEMP]), step=0.5),
+            "Servers": st.column_config.NumberColumn(min_value=int(LOW[SERVERS]), max_value=int(HIGH[SERVERS]), step=10),
+            "Cooling hours": st.column_config.NumberColumn(min_value=float(LOW[COOLING]), max_value=float(HIGH[COOLING]), step=0.5),
+        },
+    )
+    rows = []
+    for _, r in edited.dropna(subset=["City", "Servers", "Temperature (assumed °C)", "Cooling hours"]).iterrows():
+        pred = predict({SERVERS: float(r["Servers"]), TEMP: float(r["Temperature (assumed °C)"]),
+                        COOLING: float(r["Cooling hours"]), MINING: int(bool(r["Mining on"]))})
+        rows.append({"City": r["City"], "Predicted water": pred})
+    if rows:
+        result = pd.DataFrame(rows).set_index("City")
+        st.markdown(f"**Predicted water use per scenario ({WATER_UNIT})**")
+        st.bar_chart(result, height=300, color="#27D8E8")
+        best = result["Predicted water"].idxmax()
+        st.caption(f"In this example, {best} has the highest predicted water use because of the temperature you assumed. "
+                   "This is a what-if on the trained model, not a measurement of real cities.")
+
+# ------------------------------------------------------------------
+# PAGE: VALIDATION
+# ------------------------------------------------------------------
+elif page == PAGES[5]:
     st.markdown('<div class="sec">Validation</div>', unsafe_allow_html=True)
     v1, v2, v3 = st.columns(3)
     v1.metric("R² (unseen data)", f"{metrics['r2']:.3f}")
