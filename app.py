@@ -82,7 +82,7 @@ html, body, [class*="css"], .stApp { font-family:'Manrope',sans-serif; }
 .brand p { color:#8FD3F5; font-style:italic; margin:4px 0 0 0; font-size:.9rem; line-height:1.35; }
 .sidefoot { margin-top:34px; padding:14px 6px; border-top:1px solid #123B5E; color:#A8BED2; font-size:.85rem; }
 .sidefoot b { color:#F3F8FF; display:block; font-size:1rem; }
-.hero { position:relative; overflow:hidden; border:1px solid #1A6FA8; border-radius:18px; padding:26px 34px 40px 34px; margin-bottom:18px;
+.hero { position:relative; overflow:hidden; border:1px solid #1A6FA8; border-radius:18px; padding:28px 34px; margin-bottom:18px;
         background:linear-gradient(100deg,#05203D 0%,#0A4A82 55%,#1B86DA 100%); display:flex; align-items:center; gap:26px; }
 .hero h1 { margin:0; color:#F3F8FF; font-size:3rem; font-weight:800; line-height:1.05; }
 .hero h1 span { color:#27D8E8; }
@@ -344,7 +344,8 @@ def next_reading(prev, rng):
 # ------------------------------------------------------------------
 # SESSION STATE
 # ------------------------------------------------------------------
-if "history" not in st.session_state:
+if "history" not in st.session_state or any(f not in st.session_state.history[-1] for f in FEATURES):
+    # (also resets stale readings left over from an older version of the app)
     start = {f: float(MEDIAN[f]) for f in FEATURES}
     start[MINING] = 0
     start["Predicted water"] = predict(start)
@@ -363,7 +364,7 @@ DROP = ('<svg width="64" height="78" viewBox="0 0 64 80"><defs><linearGradient i
 
 PAGES = ["🏠 Home", "📊 Data Explorer", "🧠 XAI Explanations", "🔮 What-If", "✅ Validation", "🧩 Architecture"]
 with st.sidebar:
-    st.markdown(f'<div class="brand">{DROP}<h2>EcoXAI <span>2.0</span></h2><p>Smarter Water Usage<br>for a Greener Tomorrow</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand"><h2>EcoXAI <span>2.0</span></h2><p>Saving Water.<br>Explaining Why.<br>Intelligently.</p></div>', unsafe_allow_html=True)
     page = st.radio("Navigation", PAGES, label_visibility="collapsed")
     st.markdown('<div class="sidefoot">Developed by<b>SRI BHARATHI VN</b>III B.Sc. Computer Science<br>with Cognitive Systems</div>', unsafe_allow_html=True)
 
@@ -371,12 +372,9 @@ with st.sidebar:
 # HERO
 # ------------------------------------------------------------------
 st.markdown(
-    f'<div class="hero">{DROP}<div><h1>EcoXAI <span>2.0</span></h1>'
-    '<div class="l2">Understand. Explain. Conserve.</div>'
-    '<div class="l3">Explainable IoT Water Intelligence for AI Data Centres</div></div>'
-    '<div class="script">Less water waste.<br>A cleaner future.</div>'
-    '<svg class="wave" viewBox="0 0 1200 120" preserveAspectRatio="none"><path d="M0 70C200 20 400 110 600 60S1000 20 1200 60V120H0Z" fill="rgba(39,216,232,.22)"/>'
-    '<path d="M0 92C250 52 450 120 700 82S1050 52 1200 88V120H0Z" fill="rgba(30,123,224,.45)"/></svg></div>',
+    '<div class="hero"><div><h1>EcoXAI <span>2.0</span></h1>'
+    '<div class="l2">Saving Water. Explaining Why. Intelligently.</div>'
+    '<div class="l3">Explainable IoT Water Intelligence for AI Data Centres</div></div></div>',
     unsafe_allow_html=True,
 )
 
@@ -554,8 +552,7 @@ digraph G {
     st.markdown("Most dashboards stop after showing the number. EcoXAI adds the next two steps: it explains which input caused the water use, and it tells the operator what to check first.")
 
 st.markdown(
-    '<div class="footer"><span>Cleaner data centres · Sustainable planet</span>'
-    '<span>Developed by <b style="color:#27D8E8">SRI BHARATHI VN</b>, III B.Sc. Computer Science with Cognitive Systems</span>'
-    '<span class="sc">Every drop counts</span></div>',
+    '<div class="footer"><span>Saving Water. Explaining Why. Intelligently.</span>'
+    '<span>Developed by <b style="color:#27D8E8">SRI BHARATHI VN</b>, III B.Sc. Computer Science with Cognitive Systems</span></div>',
     unsafe_allow_html=True,
 )
